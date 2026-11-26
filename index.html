@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>איתור גוש וחלקה</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #1d2330;
+      --muted: #5f6b7d;
+      --border: #dde2ea;
+      --accent: #0b6bcb;
+      --accent-text: #ffffff;
+      --error: #b3261e;
+      --parcel: #ffea00;
+      --gush: #00e5ff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151b;
+        --panel: #1b2029;
+        --text: #e7ebf2;
+        --muted: #9aa5b6;
+        --border: #2d3442;
+        --accent: #4c9eff;
+        --accent-text: #0b1220;
+        --error: #ff8a80;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    h1 { font-size: 1.2rem; margin: 0; }
+    form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+    label { display: flex; flex-direction: column; font-size: .8rem; color: var(--muted); gap: 4px; }
+    input {
+      width: 110px;
+      padding: 8px 10px;
+      font-size: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    button {
+      padding: 9px 16px;
+      font-size: 1rem;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: var(--accent-text);
+      cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+    button:disabled { opacity: .6; cursor: wait; }
+    main { flex: 1; display: flex; min-height: 0; }
+    #map { flex: 1; min-height: 300px; }
+    aside {
+      width: 320px;
+      background: var(--panel);
+      border-inline-start: 1px solid var(--border);
+      padding: 16px;
+      overflow-y: auto;
+      font-size: .95rem;
+    }
+    #status { min-height: 1.4em; color: var(--muted); margin-bottom: 8px; }
+    #status.error { color: var(--error); }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 6px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    td:first-child { color: var(--muted); white-space: nowrap; padding-inline-end: 12px; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .links a, .links button { font-size: .85rem; padding: 6px 10px; }
+    .links a { color: var(--accent); text-decoration: none; border: 1px solid var(--border); border-radius: 6px; }
+    .hint { color: var(--muted); font-size: .85rem; line-height: 1.5; }
+    .parcel-label {
+      background: rgba(0,0,0,.6); color: #fff; border: 0; box-shadow: none;
+      font-weight: bold; font-size: 13px;
+    }
+    @media (max-width: 760px) {
+      main { flex-direction: column; }
+      #map { min-height: 55vh; }
+      aside { width: 100%; border-inline-start: 0; border-top: 1px solid var(--border); }
+      input { width: 90px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>איתור גוש וחלקה על גבי תצ״א</h1>
+    <form id="searchForm" autocomplete="off">
+      <label>גוש
+        <input id="gush" type="number" inputmode="numeric" min="1" required placeholder="למשל 6106" />
+      </label>
+      <label>חלקה
+        <input id="helka" type="number" inputmode="numeric" min="1" placeholder="ריק = כל הגוש" />
+      </label>
+      <button id="searchBtn" type="submit">איתור</button>
+    </form>
+  </header>
+
+  <main>
+    <div id="map" role="application" aria-label="מפה"></div>
+    <aside>
+      <div id="status" aria-live="polite"></div>
+      <div id="details">
+        <p class="hint">
+          הזינו מספר גוש וחלקה ולחצו "איתור". החלקה תסומן בצהוב והגוש בתכלת על גבי תצלום האוויר.<br />
+          אפשר גם ללחוץ על כל נקודה במפה כדי לזהות את הגוש והחלקה שבה.
+        </p>
+      </div>
+    </aside>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script>
+    // שכבת החלקות הארצית (מפ"י) המפורסמת כשירות ArcGIS ציבורי
+    const PARCELS_URL =
+      'https://services8.arcgis.com/JcXY3lLZni6BK4El/arcgis/rest/services/PARCEL_ALL/FeatureServer/0/query';
+
+    const FIELD_LABELS = {
+      GUSH_NUM: 'גוש',
+      GUSH_SUFFI: 'תת-גוש',
+      PARCEL: 'חלקה',
+      LEGAL_AREA: 'שטח רשום (מ״ר)',
+      SHAPE_AREA: 'שטח מחושב (מ״ר)',
+      LOCALITY_N: 'יישוב',
+      REG_MUN_NA: 'רשות',
+      COUNTY_NAM: 'נפה',
+      REGION_NAM: 'מחוז',
+      STATUS_TEX: 'סטטוס',
+      UPDATEDATE: 'תאריך עדכון',
+    };
+
+    // ---------- מפה ----------
+    const map = L.map('map', { zoomControl: true }).setView([31.6, 34.9], 8);
+
+    const ortho = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 20, maxNativeZoom: 19, attribution: 'תצ״א: Esri, Maxar, Earthstar Geographics' }
+    ).addTo(map);
+    const labels = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 20, maxNativeZoom: 19 }
+    ).addTo(map);
+    const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 20, maxNativeZoom: 19, attribution: '© OpenStreetMap',
+    });
+
+    L.control.layers(
+      { 'תצ״א': ortho, 'מפת רחובות': streets },
+      { 'שמות ויישובים': labels },
+      { position: 'topleft' }
+    ).addTo(map);
+    L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+
+    const gushLayer = L.geoJSON(null, {
+      style: { color: getCss('--gush'), weight: 2, fillOpacity: 0.05, dashArray: '6 4' },
+      onEachFeature: (f, layer) => {
+        layer.bindTooltip(String(f.properties.PARCEL ?? ''), {
+          permanent: false, direction: 'center', className: 'parcel-label',
+        });
+        layer.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          showParcel(f.properties.GUSH_NUM, f.properties.PARCEL);
+        });
+      },
+    }).addTo(map);
+    const parcelLayer = L.geoJSON(null, {
+      style: { color: getCss('--parcel'), weight: 4, fillColor: getCss('--parcel'), fillOpacity: 0.25 },
+    }).addTo(map);
+
+    // ---------- רכיבי ממשק ----------
+    const $ = (id) => document.getElementById(id);
+    const form = $('searchForm');
+    const gushInput = $('gush');
+    const helkaInput = $('helka');
+    const btn = $('searchBtn');
+    const statusEl = $('status');
+    const detailsEl = $('details');
+
+    function getCss(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+    function setStatus(msg, isError = false) {
+      statusEl.textContent = msg;
+      statusEl.classList.toggle('error', isError);
+    }
+    function setBusy(busy) {
+      btn.disabled = busy;
+      btn.textContent = busy ? 'מחפש…' : 'איתור';
+    }
+
+    // ---------- שאילתות ----------
+    async function queryParcels(params) {
+      const qs = new URLSearchParams({
+        outFields: '*',
+        outSR: '4326',
+        returnGeometry: 'true',
+        f: 'geojson',
+        ...params,
+      });
+      const res = await fetch(`${PARCELS_URL}?${qs}`);
+      if (!res.ok) throw new Error(`שגיאת שרת (${res.status})`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || 'שגיאה בשאילתה');
+      return data;
+    }
+
+    async function loadGush(gush) {
+      gushLayer.clearLayers();
+      const data = await queryParcels({ where: `GUSH_NUM=${gush}` });
+      gushLayer.addData(data);
+      return data.features || [];
+    }
+
+    async function showParcel(gush, helka) {
+      gush = parseInt(gush, 10);
+      helka = helka === '' || helka == null ? null : parseInt(helka, 10);
+      if (!Number.isInteger(gush) || gush <= 0) {
+        setStatus('יש להזין מספר גוש תקין', true);
+        return;
+      }
+      gushInput.value = gush;
+      helkaInput.value = helka ?? '';
+      updateUrl(gush, helka);
+      setBusy(true);
+      setStatus('טוען נתונים…');
+      parcelLayer.clearLayers();
+
+      try {
+        const gushFeatures = await loadGush(gush);
+        if (!gushFeatures.length) {
+          setStatus(`גוש ${gush} לא נמצא`, true);
+          renderDetails(null);
+          return;
+        }
+        if (helka == null) {
+          map.fitBounds(gushLayer.getBounds(), { padding: [20, 20] });
+          setStatus(`גוש ${gush}: ${gushFeatures.length} חלקות. לחצו על חלקה לפרטים.`);
+          renderGushSummary(gush, gushFeatures);
+          return;
+        }
+        const matches = gushFeatures.filter((f) => Number(f.properties.PARCEL) === helka);
+        if (!matches.length) {
+          map.fitBounds(gushLayer.getBounds(), { padding: [20, 20] });
+          setStatus(`חלקה ${helka} לא נמצאה בגוש ${gush}`, true);
+          renderGushSummary(gush, gushFeatures);
+          return;
+        }
+        parcelLayer.addData({ type: 'FeatureCollection', features: matches });
+        parcelLayer.bringToFront();
+        map.fitBounds(parcelLayer.getBounds(), { padding: [40, 40], maxZoom: 19 });
+        setStatus(`נמצאה חלקה ${helka} בגוש ${gush}`);
+        renderDetails(matches[0]);
+      } catch (err) {
+        console.error(err);
+        setStatus(`לא ניתן לטעון נתונים: ${err.message}`, true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function identifyAt(latlng) {
+      setStatus('מזהה חלקה בנקודה…');
+      try {
+        const data = await queryParcels({
+          geometry: `${latlng.lng},${latlng.lat}`,
+          geometryType: 'esriGeometryPoint',
+          inSR: '4326',
+          spatialRel: 'esriSpatialRelIntersects',
+          returnGeometry: 'false',
+        });
+        const f = data.features && data.features[0];
+        if (!f) {
+          setStatus('לא נמצאה חלקה בנקודה זו', true);
+          return;
+        }
+        showParcel(f.properties.GUSH_NUM, f.properties.PARCEL);
+      } catch (err) {
+        console.error(err);
+        setStatus(`לא ניתן לזהות: ${err.message}`, true);
+      }
+    }
+
+    // ---------- תצוגת פרטים ----------
+    function formatValue(key, v) {
+      if (v == null || v === '') return null;
+      if (/DATE/i.test(key) && typeof v === 'number' && v > 1e11) {
+        return new Date(v).toLocaleDateString('he-IL');
+      }
+      if (/AREA/i.test(key) && typeof v === 'number') {
+        return Math.round(v).toLocaleString('he-IL');
+      }
+      return String(v);
+    }
+
+    function renderDetails(feature) {
+      if (!feature) { detailsEl.innerHTML = ''; return; }
+      const p = feature.properties;
+      const rows = Object.keys(FIELD_LABELS)
+        .map((k) => [FIELD_LABELS[k], formatValue(k, p[k])])
+        .filter(([, v]) => v != null);
+
+      const center = parcelLayer.getBounds().getCenter();
+      const lat = center.lat.toFixed(6);
+      const lng = center.lng.toFixed(6);
+
+      detailsEl.innerHTML = '';
+      const table = document.createElement('table');
+      for (const [label, value] of rows) {
+        const tr = table.insertRow();
+        tr.insertCell().textContent = label;
+        tr.insertCell().textContent = value;
+      }
+      const tr = table.insertRow();
+      tr.insertCell().textContent = 'מרכז (WGS84)';
+      const c = tr.insertCell(); c.dir = 'ltr'; c.style.textAlign = 'right'; c.textContent = `${lat}, ${lng}`;
+      detailsEl.appendChild(table);
+
+      const links = document.createElement('div');
+      links.className = 'links';
+      links.append(
+        makeLink('Google Maps', `https://www.google.com/maps?q=${lat},${lng}&t=k`),
+        makeLink('GovMap', `https://www.govmap.gov.il/?q=${encodeURIComponent(`גוש ${p.GUSH_NUM} חלקה ${p.PARCEL}`)}`),
+        makeCopyButton('העתקת קישור לדף', location.href),
+        makeCopyButton('העתקת קואורדינטות', `${lat}, ${lng}`)
+      );
+      detailsEl.appendChild(links);
+    }
+
+    function renderGushSummary(gush, features) {
+      const total = features.reduce((s, f) => s + (Number(f.properties.LEGAL_AREA) || 0), 0);
+      const p = features[0].properties;
+      detailsEl.innerHTML = '';
+      const table = document.createElement('table');
+      const add = (k, v) => { if (v == null || v === '') return; const r = table.insertRow(); r.insertCell().textContent = k; r.insertCell().textContent = v; };
+      add('גוש', gush);
+      add('מספר חלקות', features.length);
+      add('יישוב', p.LOCALITY_N);
+      add('רשות', p.REG_MUN_NA);
+      if (total) add('סה״כ שטח רשום (מ״ר)', Math.round(total).toLocaleString('he-IL'));
+      detailsEl.appendChild(table);
+    }
+
+    function makeLink(text, href) {
+      const a = document.createElement('a');
+      a.textContent = text; a.href = href; a.target = '_blank'; a.rel = 'noopener';
+      return a;
+    }
+    function makeCopyButton(text, value) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'secondary'; b.textContent = text;
+      b.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(value); b.textContent = 'הועתק ✓'; }
+        catch { b.textContent = 'ההעתקה נכשלה'; }
+        setTimeout(() => (b.textContent = text), 1500);
+      });
+      return b;
+    }
+
+    // ---------- כתובת הדף (שיתוף) ----------
+    function updateUrl(gush, helka) {
+      const u = new URL(location.href);
+      u.searchParams.set('gush', gush);
+      if (helka != null) u.searchParams.set('helka', helka); else u.searchParams.delete('helka');
+      history.replaceState(null, '', u);
+    }
+
+    // ---------- אירועים ----------
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      showParcel(gushInput.value, helkaInput.value);
+    });
+    map.on('click', (e) => identifyAt(e.latlng));
+
+    const params = new URLSearchParams(location.search);
+    if (params.get('gush')) showParcel(params.get('gush'), params.get('helka'));
+  </script>
+</body>
+</html>
