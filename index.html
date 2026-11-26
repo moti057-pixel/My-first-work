@@ -132,22 +132,21 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script>
-    // שכבת החלקות הארצית (מפ"י) המפורסמת כשירות ArcGIS ציבורי
+    // שכבת החלקות הארצית - המרכז למיפוי ישראל (שירות ArcGIS ציבורי)
     const PARCELS_URL =
-      'https://services8.arcgis.com/JcXY3lLZni6BK4El/arcgis/rest/services/PARCEL_ALL/FeatureServer/0/query';
+      'https://services8.arcgis.com/JcXY3lLZni6BK4El/arcgis/rest/services/' +
+      encodeURIComponent('חלקות') + '/FeatureServer/0/query';
+    const PAGE_SIZE = 2000; // maxRecordCount של השירות
 
     const FIELD_LABELS = {
       GUSH_NUM: 'גוש',
       GUSH_SUFFI: 'תת-גוש',
       PARCEL: 'חלקה',
       LEGAL_AREA: 'שטח רשום (מ״ר)',
-      SHAPE_AREA: 'שטח מחושב (מ״ר)',
+      Shape__Area: 'שטח מחושב (מ״ר)',
       LOCALITY_N: 'יישוב',
-      REG_MUN_NA: 'רשות',
-      COUNTY_NAM: 'נפה',
-      REGION_NAM: 'מחוז',
       STATUS_TEX: 'סטטוס',
-      UPDATEDATE: 'תאריך עדכון',
+      SYS_DATE: 'תאריך עדכון',
     };
 
     // ---------- מפה ----------
@@ -227,9 +226,22 @@
 
     async function loadGush(gush) {
       gushLayer.clearLayers();
-      const data = await queryParcels({ where: `GUSH_NUM=${gush}` });
-      gushLayer.addData(data);
-      return data.features || [];
+      const features = [];
+      // השירות מחזיר עד 2000 חלקות בכל בקשה - גושים גדולים נטענים בכמה עמודים
+      for (let offset = 0; ; offset += PAGE_SIZE) {
+        const data = await queryParcels({
+          where: `GUSH_NUM=${gush}`,
+          orderByFields: 'OBJECTID',
+          resultOffset: offset,
+          resultRecordCount: PAGE_SIZE,
+        });
+        const page = data.features || [];
+        features.push(...page);
+        const more = data.exceededTransferLimit || (data.properties && data.properties.exceededTransferLimit);
+        if (!more || page.length === 0) break;
+      }
+      gushLayer.addData({ type: 'FeatureCollection', features });
+      return features;
     }
 
     async function showParcel(gush, helka) {
@@ -307,6 +319,10 @@
       if (/DATE/i.test(key) && typeof v === 'number' && v > 1e11) {
         return new Date(v).toLocaleDateString('he-IL');
       }
+      if (/DATE/i.test(key) && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+        const [y, m, d] = v.slice(0, 10).split('-');
+        return `${d}/${m}/${y}`;
+      }
       if (/AREA/i.test(key) && typeof v === 'number') {
         return Math.round(v).toLocaleString('he-IL');
       }
@@ -356,7 +372,6 @@
       add('גוש', gush);
       add('מספר חלקות', features.length);
       add('יישוב', p.LOCALITY_N);
-      add('רשות', p.REG_MUN_NA);
       if (total) add('סה״כ שטח רשום (מ״ר)', Math.round(total).toLocaleString('he-IL'));
       detailsEl.appendChild(table);
     }
