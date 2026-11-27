@@ -17,6 +17,13 @@
       --error: #b3261e;
       --parcel: #ffea00;
       --gush: #00e5ff;
+      /* סגנון "תשריט" - נשאר כמו דף מודפס גם במצב כהה */
+      --sheet-bg: #ffffff;
+      --sheet-text: #000000;
+      --sheet-line: #000000;
+      --sheet-table-line: #c00000;
+      --sheet-head: #ffe699;
+      --sheet-number: #c55a11;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -61,6 +68,7 @@
       background: var(--bg);
       color: var(--text);
     }
+    #helka { width: 150px; }
     button {
       padding: 9px 16px;
       font-size: 1rem;
@@ -75,7 +83,7 @@
     main { flex: 1; display: flex; min-height: 0; }
     #map { flex: 1; min-height: 300px; }
     aside {
-      width: 320px;
+      width: 380px;
       background: var(--panel);
       border-inline-start: 1px solid var(--border);
       padding: 16px;
@@ -84,9 +92,6 @@
     }
     #status { min-height: 1.4em; color: var(--muted); margin-bottom: 8px; }
     #status.error { color: var(--error); }
-    table { width: 100%; border-collapse: collapse; }
-    td { padding: 6px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    td:first-child { color: var(--muted); white-space: nowrap; padding-inline-end: 12px; }
     .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     .links a, .links button { font-size: .85rem; padding: 6px 10px; }
     .links a { color: var(--accent); text-decoration: none; border: 1px solid var(--border); border-radius: 6px; }
@@ -95,11 +100,85 @@
       background: rgba(0,0,0,.6); color: #fff; border: 0; box-shadow: none;
       font-weight: bold; font-size: 13px;
     }
+
+    /* ---------- גיליון פרטים בסגנון תשריט ---------- */
+    .sheet {
+      background: var(--sheet-bg);
+      color: var(--sheet-text);
+      font-family: Arial, "Noto Sans Hebrew", sans-serif;
+      padding: 12px;
+      border-radius: 4px;
+    }
+    .info-box { border-bottom: 1.5px solid var(--sheet-line); margin-bottom: 14px; }
+    .info-title {
+      border: 1.5px solid var(--sheet-line);
+      border-bottom: 0;
+      padding: 4px 8px;
+      font-weight: bold;
+      font-size: 1.05rem;
+    }
+    .info-box table { width: 100%; border-collapse: collapse; }
+    .info-box th {
+      width: 1%;
+      white-space: nowrap;
+      text-align: right;
+      padding: 2px 6px 2px 12px;
+      border-inline-end: 1.5px solid var(--sheet-line);
+      font-weight: bold;
+    }
+    .info-box td { padding: 2px 10px; }
+    .file-no {
+      display: block;
+      text-align: center;
+      color: var(--sheet-number);
+      font-weight: bold;
+      font-size: 1.35rem;
+      margin: 4px auto 12px;
+      min-height: 1.6em;
+      outline: none;
+      border-bottom: 1px dashed transparent;
+    }
+    .file-no:empty::before { content: attr(data-placeholder); color: #b9b9b9; font-weight: normal; font-size: .95rem; }
+    .file-no:hover, .file-no:focus { border-bottom-color: #d0d0d0; }
+    table.parcels {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1.5px solid var(--sheet-table-line);
+      font-size: .95rem;
+    }
+    table.parcels th, table.parcels td {
+      border: 1px solid var(--sheet-table-line);
+      text-align: center;
+      padding: 2px 6px;
+    }
+    table.parcels th { background: var(--sheet-head); font-weight: bold; }
+    table.parcels tfoot td { font-weight: bold; }
+    table.parcels select {
+      font: inherit; color: inherit; background: transparent;
+      border: 0; text-align: center; text-align-last: center; cursor: pointer; appearance: none;
+      padding: 0 4px;
+    }
+    .sheet-note { font-size: .85rem; margin-top: 10px; line-height: 1.5; }
+    .sheet-note em { display: block; margin-top: 6px; }
+
     @media (max-width: 760px) {
       main { flex-direction: column; }
       #map { min-height: 55vh; }
       aside { width: 100%; border-inline-start: 0; border-top: 1px solid var(--border); }
       input { width: 90px; }
+      #helka { width: 130px; }
+    }
+
+    /* ---------- הדפסה ---------- */
+    @media print {
+      @page { size: A4 landscape; margin: 10mm; }
+      body { background: #fff; display: block; height: auto; }
+      header form, #status, .links, .hint, .leaflet-control-zoom, .leaflet-control-layers { display: none !important; }
+      header { border: 0; padding: 0 0 6px; }
+      main { display: flex; height: 170mm; border: 1.5px solid #000; }
+      #map { height: 100%; }
+      aside { width: 95mm; border-inline-start: 1.5px solid #000; overflow: visible; }
+      .file-no:empty { display: none; }
     }
   </style>
 </head>
@@ -110,8 +189,8 @@
       <label>גוש
         <input id="gush" type="number" inputmode="numeric" min="1" required placeholder="למשל 6106" />
       </label>
-      <label>חלקה
-        <input id="helka" type="number" inputmode="numeric" min="1" placeholder="ריק = כל הגוש" />
+      <label>חלקה / חלקות
+        <input id="helka" type="text" inputmode="numeric" placeholder="49,50 או 49-51" />
       </label>
       <button id="searchBtn" type="submit">איתור</button>
     </form>
@@ -123,8 +202,9 @@
       <div id="status" aria-live="polite"></div>
       <div id="details">
         <p class="hint">
-          הזינו מספר גוש וחלקה ולחצו "איתור". החלקה תסומן בצהוב והגוש בתכלת על גבי תצלום האוויר.<br />
-          אפשר גם ללחוץ על כל נקודה במפה כדי לזהות את הגוש והחלקה שבה.
+          הזינו מספר גוש וחלקה ולחצו "איתור". אפשר להזין כמה חלקות (49,50,51) או טווח (49-51).
+          החלקות יסומנו בצהוב ושאר חלקות הגוש בתכלת על גבי תצלום האוויר.<br />
+          לחיצה על המפה מזהה את הגוש והחלקה בנקודה. Shift + לחיצה על חלקה בגוש מוסיפה או מסירה אותה.
         </p>
       </div>
     </aside>
@@ -137,17 +217,7 @@
       'https://services8.arcgis.com/JcXY3lLZni6BK4El/arcgis/rest/services/' +
       encodeURIComponent('חלקות') + '/FeatureServer/0/query';
     const PAGE_SIZE = 2000; // maxRecordCount של השירות
-
-    const FIELD_LABELS = {
-      GUSH_NUM: 'גוש',
-      GUSH_SUFFI: 'תת-גוש',
-      PARCEL: 'חלקה',
-      LEGAL_AREA: 'שטח רשום (מ״ר)',
-      Shape__Area: 'שטח מחושב (מ״ר)',
-      LOCALITY_N: 'יישוב',
-      STATUS_TEX: 'סטטוס',
-      SYS_DATE: 'תאריך עדכון',
-    };
+    const MAX_HELKOT = 200;
 
     // ---------- מפה ----------
     const map = L.map('map', { zoomControl: true }).setView([31.6, 34.9], 8);
@@ -179,12 +249,26 @@
         });
         layer.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
-          showParcel(f.properties.GUSH_NUM, f.properties.PARCEL);
+          const n = Number(f.properties.PARCEL);
+          const ev = e.originalEvent || {};
+          if (ev.shiftKey || ev.ctrlKey || ev.metaKey) {
+            const set = new Set(state.helkot);
+            set.has(n) ? set.delete(n) : set.add(n);
+            showParcels(f.properties.GUSH_NUM, [...set]);
+          } else {
+            showParcels(f.properties.GUSH_NUM, [n]);
+          }
         });
       },
     }).addTo(map);
     const parcelLayer = L.geoJSON(null, {
       style: { color: getCss('--parcel'), weight: 4, fillColor: getCss('--parcel'), fillOpacity: 0.25 },
+      onEachFeature: (f, layer) => {
+        layer.bindTooltip(String(f.properties.PARCEL ?? ''), {
+          permanent: true, direction: 'center', className: 'parcel-label',
+        });
+      },
+      interactive: false,
     }).addTo(map);
 
     // ---------- רכיבי ממשק ----------
@@ -196,6 +280,10 @@
     const statusEl = $('status');
     const detailsEl = $('details');
 
+    const state = { gush: null, gushFeatures: [], helkot: [], partial: {} };
+    const urlParams = new URLSearchParams(location.search);
+    let fileNo = urlParams.get('tik') || '';
+
     function getCss(name) {
       return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     }
@@ -206,6 +294,32 @@
     function setBusy(busy) {
       btn.disabled = busy;
       btn.textContent = busy ? 'מחפש…' : 'איתור';
+    }
+
+    // "49,50,51" / "49-51" / "49 52-54" -> [49,50,51,...]
+    function parseHelkot(text) {
+      const out = new Set();
+      for (const part of String(text || '').split(/[\s,;]+/).filter(Boolean)) {
+        const m = part.match(/^(\d+)(?:-(\d+))?$/);
+        if (!m) throw new Error(`ערך חלקה לא תקין: "${part}"`);
+        let a = parseInt(m[1], 10), b = m[2] ? parseInt(m[2], 10) : a;
+        if (a > b) [a, b] = [b, a];
+        if (b - a >= MAX_HELKOT) throw new Error(`טווח גדול מדי (עד ${MAX_HELKOT} חלקות)`);
+        for (let i = a; i <= b; i++) out.add(i);
+      }
+      if (out.size > MAX_HELKOT) throw new Error(`ניתן לבחור עד ${MAX_HELKOT} חלקות`);
+      return [...out].sort((x, y) => x - y);
+    }
+    // [49,50,51,55] -> "49-51,55"
+    function formatHelkot(list) {
+      const parts = [];
+      for (let i = 0; i < list.length; i++) {
+        let j = i;
+        while (j + 1 < list.length && list[j + 1] === list[j] + 1) j++;
+        parts.push(j - i >= 2 ? `${list[i]}-${list[j]}` : list.slice(i, j + 1).join(','));
+        i = j;
+      }
+      return parts.join(',');
     }
 
     // ---------- שאילתות ----------
@@ -225,6 +339,7 @@
     }
 
     async function loadGush(gush) {
+      if (state.gush === gush) return state.gushFeatures;
       gushLayer.clearLayers();
       const features = [];
       // השירות מחזיר עד 2000 חלקות בכל בקשה - גושים גדולים נטענים בכמה עמודים
@@ -241,48 +356,64 @@
         if (!more || page.length === 0) break;
       }
       gushLayer.addData({ type: 'FeatureCollection', features });
+      state.gush = gush;
+      state.gushFeatures = features;
+      state.partial = {};
       return features;
     }
 
-    async function showParcel(gush, helka) {
+    async function showParcels(gush, helkot) {
       gush = parseInt(gush, 10);
-      helka = helka === '' || helka == null ? null : parseInt(helka, 10);
       if (!Number.isInteger(gush) || gush <= 0) {
         setStatus('יש להזין מספר גוש תקין', true);
         return;
       }
+      helkot = [...new Set(helkot)].sort((a, b) => a - b);
       gushInput.value = gush;
-      helkaInput.value = helka ?? '';
-      updateUrl(gush, helka);
+      helkaInput.value = formatHelkot(helkot);
+      updateUrl(gush, helkot);
       setBusy(true);
-      setStatus('טוען נתונים…');
       parcelLayer.clearLayers();
 
       try {
+        if (state.gush !== gush) setStatus('טוען נתונים…');
         const gushFeatures = await loadGush(gush);
+        state.helkot = helkot;
         if (!gushFeatures.length) {
           setStatus(`גוש ${gush} לא נמצא`, true);
-          renderDetails(null);
+          detailsEl.innerHTML = '';
           return;
         }
-        if (helka == null) {
+        if (!helkot.length) {
           map.fitBounds(gushLayer.getBounds(), { padding: [20, 20] });
           setStatus(`גוש ${gush}: ${gushFeatures.length} חלקות. לחצו על חלקה לפרטים.`);
-          renderGushSummary(gush, gushFeatures);
+          renderSheet(gush, gushFeatures, []);
           return;
         }
-        const matches = gushFeatures.filter((f) => Number(f.properties.PARCEL) === helka);
+        const wanted = new Set(helkot);
+        const matches = gushFeatures
+          .filter((f) => wanted.has(Number(f.properties.PARCEL)))
+          .sort((a, b) => a.properties.PARCEL - b.properties.PARCEL);
+        const found = new Set(matches.map((f) => Number(f.properties.PARCEL)));
+        const missing = helkot.filter((h) => !found.has(h));
+
         if (!matches.length) {
           map.fitBounds(gushLayer.getBounds(), { padding: [20, 20] });
-          setStatus(`חלקה ${helka} לא נמצאה בגוש ${gush}`, true);
-          renderGushSummary(gush, gushFeatures);
+          setStatus(`${helkot.length > 1 ? 'החלקות' : 'חלקה'} ${formatHelkot(helkot)} לא נמצאו בגוש ${gush}`, true);
+          renderSheet(gush, gushFeatures, []);
           return;
         }
         parcelLayer.addData({ type: 'FeatureCollection', features: matches });
         parcelLayer.bringToFront();
         map.fitBounds(parcelLayer.getBounds(), { padding: [40, 40], maxZoom: 19 });
-        setStatus(`נמצאה חלקה ${helka} בגוש ${gush}`);
-        renderDetails(matches[0]);
+        if (missing.length) {
+          setStatus(`לא נמצאו בגוש ${gush}: ${formatHelkot(missing)}`, true);
+        } else {
+          setStatus(matches.length > 1
+            ? `נמצאו ${matches.length} חלקות בגוש ${gush}`
+            : `נמצאה חלקה ${helkot[0]} בגוש ${gush}`);
+        }
+        renderSheet(gush, gushFeatures, matches);
       } catch (err) {
         console.error(err);
         setStatus(`לא ניתן לטעון נתונים: ${err.message}`, true);
@@ -306,86 +437,130 @@
           setStatus('לא נמצאה חלקה בנקודה זו', true);
           return;
         }
-        showParcel(f.properties.GUSH_NUM, f.properties.PARCEL);
+        showParcels(f.properties.GUSH_NUM, [Number(f.properties.PARCEL)]);
       } catch (err) {
         console.error(err);
         setStatus(`לא ניתן לזהות: ${err.message}`, true);
       }
     }
 
-    // ---------- תצוגת פרטים ----------
-    function formatValue(key, v) {
-      if (v == null || v === '') return null;
-      if (/DATE/i.test(key) && typeof v === 'number' && v > 1e11) {
-        return new Date(v).toLocaleDateString('he-IL');
+    // ---------- גיליון פרטים בסגנון תשריט ----------
+    function el(tag, attrs = {}, ...children) {
+      const e = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'class') e.className = v;
+        else if (k in e && typeof v !== 'string') e[k] = v;
+        else e.setAttribute(k, v);
       }
-      if (/DATE/i.test(key) && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+      for (const c of children) if (c != null) e.append(c);
+      return e;
+    }
+    const uniq = (arr) => [...new Set(arr.filter((v) => v != null && v !== ''))];
+    const dunam = (m2) => (Number(m2) / 1000).toFixed(3);
+    function formatDate(v) {
+      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
         const [y, m, d] = v.slice(0, 10).split('-');
         return `${d}/${m}/${y}`;
       }
-      if (/AREA/i.test(key) && typeof v === 'number') {
-        return Math.round(v).toLocaleString('he-IL');
-      }
-      return String(v);
+      return v == null ? '' : String(v);
     }
 
-    function renderDetails(feature) {
-      if (!feature) { detailsEl.innerHTML = ''; return; }
-      const p = feature.properties;
-      const rows = Object.keys(FIELD_LABELS)
-        .map((k) => [FIELD_LABELS[k], formatValue(k, p[k])])
-        .filter(([, v]) => v != null);
+    function renderSheet(gush, gushFeatures, selected) {
+      const ref = selected.length ? selected : gushFeatures;
+      const props = ref.map((f) => f.properties);
+      const sheet = el('div', { class: 'sheet' });
 
-      const center = parcelLayer.getBounds().getCenter();
-      const lat = center.lat.toFixed(6);
-      const lng = center.lng.toFixed(6);
+      // תיבת פרטים
+      const info = el('table');
+      const addInfo = (label, value) => {
+        if (value == null || value === '') return;
+        info.append(el('tr', {}, el('th', {}, `${label} :`), el('td', {}, String(value))));
+      };
+      addInfo('ישוב', uniq(props.map((p) => p.LOCALITY_N)).join(', '));
+      addInfo('גוש', gush);
+      if (selected.length) {
+        addInfo('חלקות', formatHelkot(selected.map((f) => Number(f.properties.PARCEL))));
+      } else {
+        addInfo('מס׳ חלקות', gushFeatures.length);
+      }
+      addInfo('סטטוס', uniq(props.map((p) => p.STATUS_TEX)).join(', '));
+      const dates = uniq(props.map((p) => p.SYS_DATE)).sort();
+      if (dates.length) addInfo('עדכון מפ״י', formatDate(dates[dates.length - 1]));
+      sheet.append(el('div', { class: 'info-box' }, el('div', { class: 'info-title' }, 'פרטי גוש וחלקה'), info));
+
+      // מספר תיק (ניתן לעריכה)
+      const fileEl = el('div', {
+        class: 'file-no', contenteditable: 'true', spellcheck: 'false',
+        'data-placeholder': 'מס׳ תיק (לחצו להזנה)', 'aria-label': 'מספר תיק',
+      });
+      fileEl.textContent = fileNo;
+      fileEl.addEventListener('input', () => { fileNo = fileEl.textContent.trim(); updateUrl(state.gush, state.helkot); });
+      fileEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); fileEl.blur(); } });
+      sheet.append(fileEl);
+
+      if (selected.length) {
+        // טבלת חלקות: גוש | חלקה | חלקיות | שטח בדונם
+        const tbody = el('tbody');
+        let total = 0;
+        selected.forEach((f, i) => {
+          const p = f.properties;
+          const n = Number(p.PARCEL);
+          total += Number(p.LEGAL_AREA) || 0;
+          const sel = el('select', { 'aria-label': `חלקיות חלקה ${n}` },
+            el('option', { value: 'full' }, 'בשלמות'),
+            el('option', { value: 'part' }, 'בחלק'));
+          sel.value = state.partial[n] ? 'part' : 'full';
+          sel.addEventListener('change', () => { state.partial[n] = sel.value === 'part'; });
+          const tr = el('tr');
+          if (i === 0) tr.append(el('td', { rowSpan: selected.length }, String(gush)));
+          tr.append(
+            el('td', {}, String(n)),
+            el('td', {}, sel),
+            el('td', {}, p.LEGAL_AREA != null ? dunam(p.LEGAL_AREA) : '—'),
+          );
+          tbody.append(tr);
+        });
+        const table = el('table', { class: 'parcels' },
+          el('thead', {}, el('tr', {},
+            el('th', {}, 'גוש'), el('th', {}, 'חלקה'), el('th', {}, 'חלקיות'), el('th', {}, 'שטח בדונם בערך'))),
+          tbody);
+        if (selected.length > 1) {
+          table.append(el('tfoot', {}, el('tr', {},
+            el('td', { colSpan: 3 }, 'סה״כ'), el('td', {}, dunam(total)))));
+        }
+        sheet.append(table);
+        sheet.append(el('div', { class: 'sheet-note' },
+          'השטח לפי השטח הרשום בשכבת החלקות של המרכז למיפוי ישראל.',
+          el('em', {}, 'לא לצרכי רישום')));
+      } else {
+        const total = gushFeatures.reduce((s, f) => s + (Number(f.properties.LEGAL_AREA) || 0), 0);
+        if (total) sheet.append(el('div', { class: 'sheet-note' }, `סה״כ שטח רשום בגוש: ${dunam(total)} דונם`));
+      }
 
       detailsEl.innerHTML = '';
-      const table = document.createElement('table');
-      for (const [label, value] of rows) {
-        const tr = table.insertRow();
-        tr.insertCell().textContent = label;
-        tr.insertCell().textContent = value;
-      }
-      const tr = table.insertRow();
-      tr.insertCell().textContent = 'מרכז (WGS84)';
-      const c = tr.insertCell(); c.dir = 'ltr'; c.style.textAlign = 'right'; c.textContent = `${lat}, ${lng}`;
-      detailsEl.appendChild(table);
+      detailsEl.append(sheet);
 
-      const links = document.createElement('div');
-      links.className = 'links';
-      links.append(
+      // קישורים ופעולות
+      const bounds = (selected.length ? parcelLayer : gushLayer).getBounds();
+      const c = bounds.getCenter();
+      const lat = c.lat.toFixed(6), lng = c.lng.toFixed(6);
+      const helkaText = selected.length ? ` חלקה ${selected[0].properties.PARCEL}` : '';
+      detailsEl.append(el('div', { class: 'links' },
         makeLink('Google Maps', `https://www.google.com/maps?q=${lat},${lng}&t=k`),
-        makeLink('GovMap', `https://www.govmap.gov.il/?q=${encodeURIComponent(`גוש ${p.GUSH_NUM} חלקה ${p.PARCEL}`)}`),
-        makeCopyButton('העתקת קישור לדף', location.href),
-        makeCopyButton('העתקת קואורדינטות', `${lat}, ${lng}`)
-      );
-      detailsEl.appendChild(links);
-    }
-
-    function renderGushSummary(gush, features) {
-      const total = features.reduce((s, f) => s + (Number(f.properties.LEGAL_AREA) || 0), 0);
-      const p = features[0].properties;
-      detailsEl.innerHTML = '';
-      const table = document.createElement('table');
-      const add = (k, v) => { if (v == null || v === '') return; const r = table.insertRow(); r.insertCell().textContent = k; r.insertCell().textContent = v; };
-      add('גוש', gush);
-      add('מספר חלקות', features.length);
-      add('יישוב', p.LOCALITY_N);
-      if (total) add('סה״כ שטח רשום (מ״ר)', Math.round(total).toLocaleString('he-IL'));
-      detailsEl.appendChild(table);
+        makeLink('GovMap', `https://www.govmap.gov.il/?q=${encodeURIComponent(`גוש ${gush}${helkaText}`)}`),
+        makeCopyButton('העתקת קישור לדף', () => location.href),
+        makeCopyButton('העתקת קואורדינטות', () => `${lat}, ${lng}`),
+        el('button', { type: 'button', class: 'secondary', onclick: () => window.print() }, 'הדפסה'),
+      ));
     }
 
     function makeLink(text, href) {
-      const a = document.createElement('a');
-      a.textContent = text; a.href = href; a.target = '_blank'; a.rel = 'noopener';
-      return a;
+      return el('a', { href, target: '_blank', rel: 'noopener' }, text);
     }
-    function makeCopyButton(text, value) {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'secondary'; b.textContent = text;
+    function makeCopyButton(text, getValue) {
+      const b = el('button', { type: 'button', class: 'secondary' }, text);
       b.addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(value); b.textContent = 'הועתק ✓'; }
+        try { await navigator.clipboard.writeText(getValue()); b.textContent = 'הועתק ✓'; }
         catch { b.textContent = 'ההעתקה נכשלה'; }
         setTimeout(() => (b.textContent = text), 1500);
       });
@@ -393,22 +568,35 @@
     }
 
     // ---------- כתובת הדף (שיתוף) ----------
-    function updateUrl(gush, helka) {
+    function updateUrl(gush, helkot) {
       const u = new URL(location.href);
       u.searchParams.set('gush', gush);
-      if (helka != null) u.searchParams.set('helka', helka); else u.searchParams.delete('helka');
+      if (helkot && helkot.length) u.searchParams.set('helka', formatHelkot(helkot));
+      else u.searchParams.delete('helka');
+      if (fileNo) u.searchParams.set('tik', fileNo); else u.searchParams.delete('tik');
       history.replaceState(null, '', u);
     }
 
     // ---------- אירועים ----------
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      showParcel(gushInput.value, helkaInput.value);
+      try {
+        showParcels(gushInput.value, parseHelkot(helkaInput.value));
+      } catch (err) {
+        setStatus(err.message, true);
+      }
     });
     map.on('click', (e) => identifyAt(e.latlng));
+    window.addEventListener('beforeprint', () => map.invalidateSize());
+    window.addEventListener('afterprint', () => map.invalidateSize());
 
-    const params = new URLSearchParams(location.search);
-    if (params.get('gush')) showParcel(params.get('gush'), params.get('helka'));
+    if (urlParams.get('gush')) {
+      try {
+        showParcels(urlParams.get('gush'), parseHelkot(urlParams.get('helka')));
+      } catch (err) {
+        setStatus(err.message, true);
+      }
+    }
   </script>
 </body>
 </html>
