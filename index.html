@@ -138,6 +138,9 @@
       outline: none;
       border-bottom: 1px dashed transparent;
     }
+    .info-box td.editable { outline: none; cursor: text; border-bottom: 1px dashed transparent; }
+    .info-box td.editable:hover, .info-box td.editable:focus { border-bottom-color: #d0d0d0; }
+    .info-box td.editable:empty::before { content: attr(data-placeholder); color: #b9b9b9; }
     .file-no:empty::before { content: attr(data-placeholder); color: #b9b9b9; font-weight: normal; font-size: .95rem; }
     .file-no:hover, .file-no:focus { border-bottom-color: #d0d0d0; }
     table.parcels {
@@ -179,6 +182,7 @@
       #map { height: 100%; }
       aside { width: 95mm; border-inline-start: 1.5px solid #000; overflow: visible; }
       .file-no:empty { display: none; }
+      .info-box td.editable:empty::before { content: ''; }
     }
   </style>
 </head>
@@ -283,6 +287,11 @@
     const state = { gush: null, gushFeatures: [], helkot: [], partial: {} };
     const urlParams = new URLSearchParams(location.search);
     let fileNo = urlParams.get('tik') || '';
+    // שדות שממלאים ידנית (אין להם מקור בשכבת החלקות) - נשמרים בקישור
+    const manual = {
+      tochnit: urlParams.get('tochnit') || '',
+      migrash: urlParams.get('migrash') || '',
+    };
 
     function getCss(name) {
       return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -483,6 +492,10 @@
       } else {
         addInfo('מס׳ חלקות', gushFeatures.length);
       }
+      if (selected.length) {
+        info.append(editableInfoRow('תוכנית', 'tochnit', 'למשל תמל/2053'));
+        info.append(editableInfoRow('מגרש', 'migrash', 'למשל 8612, בחלק'));
+      }
       addInfo('סטטוס', uniq(props.map((p) => p.STATUS_TEX)).join(', '));
       const dates = uniq(props.map((p) => p.SYS_DATE)).sort();
       if (dates.length) addInfo('עדכון מפ״י', formatDate(dates[dates.length - 1]));
@@ -554,6 +567,17 @@
       ));
     }
 
+    function editableInfoRow(label, key, placeholder) {
+      const td = el('td', {
+        class: 'editable', contenteditable: 'true', spellcheck: 'false',
+        'data-placeholder': placeholder, 'aria-label': label,
+      });
+      td.textContent = manual[key];
+      td.addEventListener('input', () => { manual[key] = td.textContent.trim(); updateUrl(state.gush, state.helkot); });
+      td.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); td.blur(); } });
+      return el('tr', {}, el('th', {}, `${label} :`), td);
+    }
+
     function makeLink(text, href) {
       return el('a', { href, target: '_blank', rel: 'noopener' }, text);
     }
@@ -574,6 +598,9 @@
       if (helkot && helkot.length) u.searchParams.set('helka', formatHelkot(helkot));
       else u.searchParams.delete('helka');
       if (fileNo) u.searchParams.set('tik', fileNo); else u.searchParams.delete('tik');
+      for (const [k, v] of Object.entries(manual)) {
+        if (v) u.searchParams.set(k, v); else u.searchParams.delete(k);
+      }
       history.replaceState(null, '', u);
     }
 
