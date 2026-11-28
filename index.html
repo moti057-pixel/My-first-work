@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>איתור גוש וחלקה</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
   <style>
     :root {
       --bg: #f6f7f9;
@@ -17,6 +18,7 @@
       --error: #b3261e;
       --parcel: #ffea00;
       --gush: #00e5ff;
+      --drawn: #ff2d2d;
       /* סגנון "תשריט" - נשאר כמו דף מודפס גם במצב כהה */
       --sheet-bg: #ffffff;
       --sheet-text: #000000;
@@ -96,6 +98,13 @@
     .links a, .links button { font-size: .85rem; padding: 6px 10px; }
     .links a { color: var(--accent); text-decoration: none; border: 1px solid var(--border); border-radius: 6px; }
     .hint { color: var(--muted); font-size: .85rem; line-height: 1.5; }
+    .drawn-label {
+      background: rgba(255,45,45,.85); color: #fff; border: 0; box-shadow: none;
+      font-weight: bold; font-size: 12px;
+    }
+    .draw-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .draw-bar button { font-size: .85rem; padding: 6px 10px; }
+    .links button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
     .parcel-label {
       background: rgba(0,0,0,.6); color: #fff; border: 0; box-shadow: none;
       font-weight: bold; font-size: 13px;
@@ -176,7 +185,7 @@
     @media print {
       @page { size: A4 landscape; margin: 10mm; }
       body { background: #fff; display: block; height: auto; }
-      header form, #status, .links, .hint, .leaflet-control-zoom, .leaflet-control-layers { display: none !important; }
+      header form, #status, .links, .hint, .draw-bar, .leaflet-control-zoom, .leaflet-control-layers, .leaflet-draw { display: none !important; }
       header { border: 0; padding: 0 0 6px; }
       main { display: flex; height: 170mm; border: 1.5px solid #000; }
       #map { height: 100%; }
@@ -208,13 +217,16 @@
         <p class="hint">
           הזינו מספר גוש וחלקה ולחצו "איתור". אפשר להזין כמה חלקות (49,50,51) או טווח (49-51).
           החלקות יסומנו בצהוב ושאר חלקות הגוש בתכלת על גבי תצלום האוויר.<br />
-          לחיצה על המפה מזהה את הגוש והחלקה בנקודה. Shift + לחיצה על חלקה בגוש מוסיפה או מסירה אותה.
+          לחיצה על המפה מזהה את הגוש והחלקה בנקודה. Shift + לחיצה על חלקה בגוש מוסיפה או מסירה אותה.<br />
+          לסימון שטח: כלי הציור (מחומש / מלבן) בצד המפה. השטח המסומן בכל חלקה יחושב אוטומטית.
         </p>
       </div>
     </aside>
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
   <script>
     // שכבת החלקות הארצית - המרכז למיפוי ישראל (שירות ArcGIS ציבורי)
     const PARCELS_URL =
@@ -253,6 +265,7 @@
         });
         layer.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
+          if (drawMode) return;
           const n = Number(f.properties.PARCEL);
           const ev = e.originalEvent || {};
           if (ev.shiftKey || ev.ctrlKey || ev.metaKey) {
@@ -274,6 +287,104 @@
       },
       interactive: false,
     }).addTo(map);
+
+    // ---------- ציור פוליגון ----------
+    const drawStyle = { color: getCss('--drawn'), weight: 3, fillColor: getCss('--drawn'), fillOpacity: 0.2 };
+    const drawnItems = new L.FeatureGroup().addTo(map);
+    drawnItems.on('click', (e) => L.DomEvent.stopPropagation(e));
+    let drawMode = false; // בזמן ציור/עריכה - לחיצה על המפה לא מזהה חלקה
+
+    Object.assign(L.drawLocal.draw.toolbar.buttons, { polygon: 'ציור פוליגון', rectangle: 'ציור מלבן' });
+    Object.assign(L.drawLocal.draw.toolbar.actions, { title: 'ביטול ציור', text: 'ביטול' });
+    Object.assign(L.drawLocal.draw.toolbar.finish, { title: 'סיום ציור', text: 'סיום' });
+    Object.assign(L.drawLocal.draw.toolbar.undo, { title: 'מחיקת הנקודה האחרונה', text: 'מחק נקודה' });
+    Object.assign(L.drawLocal.draw.handlers.polygon.tooltip, {
+      start: 'לחצו כדי להתחיל לצייר', cont: 'לחצו להוספת נקודה', end: 'לחצו על הנקודה הראשונה לסגירה',
+    });
+    Object.assign(L.drawLocal.draw.handlers.rectangle.tooltip, { start: 'לחצו וגררו לציור מלבן' });
+    L.drawLocal.draw.handlers.simpleshape.tooltip.end = 'שחררו לסיום';
+    Object.assign(L.drawLocal.edit.toolbar.buttons, {
+      edit: 'עריכת סימון', editDisabled: 'אין סימון לעריכה', remove: 'מחיקת סימון', removeDisabled: 'אין סימון למחיקה',
+    });
+    Object.assign(L.drawLocal.edit.toolbar.actions.save, { title: 'שמירה', text: 'שמירה' });
+    Object.assign(L.drawLocal.edit.toolbar.actions.cancel, { title: 'ביטול', text: 'ביטול' });
+    Object.assign(L.drawLocal.edit.toolbar.actions.clearAll, { title: 'מחיקת הכל', text: 'מחק הכל' });
+    L.drawLocal.edit.handlers.edit.tooltip = { text: 'גררו נקודות לעריכה', subtext: 'ביטול מחזיר את המצב הקודם' };
+    L.drawLocal.edit.handlers.remove.tooltip = { text: 'לחצו על סימון כדי למחוק אותו' };
+
+    map.addControl(new L.Control.Draw({
+      position: 'topleft',
+      draw: {
+        polygon: { allowIntersection: false, showArea: false, shapeOptions: drawStyle },
+        rectangle: { showArea: false, shapeOptions: drawStyle },
+        polyline: false, circle: false, marker: false, circlemarker: false,
+      },
+      edit: { featureGroup: drawnItems },
+    }));
+    map.on('draw:drawstart draw:editstart draw:deletestart', () => { drawMode = true; });
+    map.on('draw:drawstop draw:editstop draw:deletestop', () => { setTimeout(() => { drawMode = false; }, 300); });
+    map.on(L.Draw.Event.CREATED, (e) => { addDrawn(e.layer); onDrawingChanged(); });
+    map.on('draw:edited draw:deleted', onDrawingChanged);
+
+    function addDrawn(layer) {
+      layer.setStyle && layer.setStyle(drawStyle);
+      drawnItems.addLayer(layer);
+    }
+    function clearDrawing() {
+      drawnItems.clearLayers();
+      onDrawingChanged();
+    }
+
+    // שטח מסומן (מ"ר) - סה"כ ולכל חלקה נבחרת (חיתוך גאומטרי)
+    function drawnPolygons() {
+      const out = [];
+      drawnItems.eachLayer((l) => { if (l.toGeoJSON) out.push(l.toGeoJSON()); });
+      return out;
+    }
+    function computeMarked(selected) {
+      const polys = drawnPolygons();
+      if (!polys.length) return null;
+      let union = polys[0];
+      for (let i = 1; i < polys.length; i++) union = turf.union(union, polys[i]) || union;
+      const perParcel = {};
+      for (const f of selected) {
+        let a = 0;
+        try {
+          const inter = turf.intersect(union, f);
+          if (inter) a = turf.area(inter);
+        } catch (err) { console.warn('intersect failed', err); }
+        perParcel[Number(f.properties.PARCEL)] = { marked: a, parcel: turf.area(f) };
+      }
+      return { total: turf.area(union), perParcel };
+    }
+    function refreshDrawnLabels() {
+      drawnItems.eachLayer((l) => {
+        const a = turf.area(l.toGeoJSON());
+        l.unbindTooltip();
+        l.bindTooltip(`${dunam(a)} ד׳`, { permanent: true, direction: 'center', className: 'drawn-label' });
+      });
+    }
+    function onDrawingChanged() {
+      refreshDrawnLabels();
+      updateUrl(state.gush, state.helkot);
+      if (state.last) renderSheet(...state.last);
+    }
+
+    // שמירת הפוליגונים בקישור: lat,lng;lat,lng|...
+    function encodePolys() {
+      const parts = [];
+      drawnItems.eachLayer((l) => {
+        const ring = l.getLatLngs()[0];
+        parts.push(ring.map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`).join(';'));
+      });
+      return parts.join('|');
+    }
+    function decodePolys(text) {
+      for (const part of String(text || '').split('|').filter(Boolean)) {
+        const ring = part.split(';').map((xy) => xy.split(',').map(Number)).filter((p) => p.length === 2 && p.every(Number.isFinite));
+        if (ring.length >= 3) addDrawn(L.polygon(ring));
+      }
+    }
 
     // ---------- רכיבי ממשק ----------
     const $ = (id) => document.getElementById(id);
@@ -475,6 +586,8 @@
     }
 
     function renderSheet(gush, gushFeatures, selected) {
+      state.last = [gush, gushFeatures, selected];
+      const marked = selected.length ? computeMarked(selected) : null;
       const ref = selected.length ? selected : gushFeatures;
       const props = ref.map((f) => f.properties);
       const sheet = el('div', { class: 'sheet' });
@@ -519,6 +632,8 @@
           const p = f.properties;
           const n = Number(p.PARCEL);
           total += Number(p.LEGAL_AREA) || 0;
+          const m = marked && marked.perParcel[n];
+          if (m) state.partial[n] = m.marked > 0 && m.marked < m.parcel * 0.99;
           const sel = el('select', { 'aria-label': `חלקיות חלקה ${n}` },
             el('option', { value: 'full' }, 'בשלמות'),
             el('option', { value: 'part' }, 'בחלק'));
@@ -531,19 +646,28 @@
             el('td', {}, sel),
             el('td', {}, p.LEGAL_AREA != null ? dunam(p.LEGAL_AREA) : '—'),
           );
+          if (marked) tr.append(el('td', {}, m && m.marked > 0.5 ? dunam(m.marked) : '—'));
           tbody.append(tr);
         });
         const table = el('table', { class: 'parcels' },
           el('thead', {}, el('tr', {},
-            el('th', {}, 'גוש'), el('th', {}, 'חלקה'), el('th', {}, 'חלקיות'), el('th', {}, 'שטח בדונם בערך'))),
+            el('th', {}, 'גוש'), el('th', {}, 'חלקה'), el('th', {}, 'חלקיות'),
+            el('th', {}, marked ? 'שטח רשום (דונם)' : 'שטח בדונם בערך'),
+            marked ? el('th', {}, 'שטח מסומן (דונם)') : null)),
           tbody);
-        if (selected.length > 1) {
+        if (selected.length > 1 || marked) {
+          const markedSum = marked ? Object.values(marked.perParcel).reduce((s, x) => s + x.marked, 0) : 0;
           table.append(el('tfoot', {}, el('tr', {},
-            el('td', { colSpan: 3 }, 'סה״כ'), el('td', {}, dunam(total)))));
+            el('td', { colSpan: 3 }, 'סה״כ'), el('td', {}, dunam(total)),
+            marked ? el('td', {}, dunam(markedSum)) : null)));
         }
         sheet.append(table);
         sheet.append(el('div', { class: 'sheet-note' },
-          'השטח לפי השטח הרשום בשכבת החלקות של המרכז למיפוי ישראל.',
+          'השטח הרשום לפי שכבת החלקות של המרכז למיפוי ישראל.',
+          marked ? ' השטח המסומן נמדד גרפית.' : null,
+          marked && marked.total - Object.values(marked.perParcel).reduce((s, x) => s + x.marked, 0) > 1
+            ? ` שטח מסומן מחוץ לחלקות הנבחרות: ${dunam(marked.total - Object.values(marked.perParcel).reduce((s, x) => s + x.marked, 0))} דונם.`
+            : null,
           el('em', {}, 'לא לצרכי רישום')));
       } else {
         const total = gushFeatures.reduce((s, f) => s + (Number(f.properties.LEGAL_AREA) || 0), 0);
@@ -551,6 +675,11 @@
       }
 
       detailsEl.innerHTML = '';
+      const hasDrawing = drawnItems.getLayers().length > 0;
+      detailsEl.append(el('div', { class: 'draw-bar' },
+        el('button', { type: 'button', class: 'secondary', onclick: startPolygon }, '✏️ סימון פוליגון'),
+        hasDrawing ? el('button', { type: 'button', class: 'secondary', onclick: clearDrawing }, 'ניקוי סימון') : null,
+      ));
       detailsEl.append(sheet);
 
       // קישורים ופעולות
@@ -563,8 +692,39 @@
         makeLink('GovMap', `https://www.govmap.gov.il/?q=${encodeURIComponent(`גוש ${gush}${helkaText}`)}`),
         makeCopyButton('העתקת קישור לדף', () => location.href),
         makeCopyButton('העתקת קואורדינטות', () => `${lat}, ${lng}`),
-        el('button', { type: 'button', class: 'secondary', onclick: () => window.print() }, 'הדפסה'),
+        el('button', { type: 'button', class: 'secondary primary', onclick: () => sendEmail(gush, selected, marked) }, '✉️ שליחה במייל'),
+        el('button', { type: 'button', class: 'secondary primary', onclick: () => window.print() }, '🖨️ הדפסה'),
       ));
+    }
+
+    function startPolygon() {
+      new L.Draw.Polygon(map, { allowIntersection: false, showArea: false, shapeOptions: drawStyle }).enable();
+    }
+
+    function sendEmail(gush, selected, marked) {
+      const lines = [];
+      const helkot = selected.map((f) => Number(f.properties.PARCEL));
+      const subject = [fileNo, `גוש ${gush}`, helkot.length ? `חלקות ${formatHelkot(helkot)}` : null]
+        .filter(Boolean).join(' - ');
+      if (fileNo) lines.push(`מס׳ תיק: ${fileNo}`);
+      const locality = uniq(selected.map((f) => f.properties.LOCALITY_N)).join(', ');
+      if (locality) lines.push(`ישוב: ${locality}`);
+      lines.push(`גוש: ${gush}`);
+      if (helkot.length) lines.push(`חלקות: ${formatHelkot(helkot)}`);
+      if (manual.tochnit) lines.push(`תוכנית: ${manual.tochnit}`);
+      if (manual.migrash) lines.push(`מגרש: ${manual.migrash}`);
+      if (selected.length) {
+        lines.push('', 'גוש | חלקה | חלקיות | שטח רשום (דונם)' + (marked ? ' | שטח מסומן (דונם)' : ''));
+        for (const f of selected) {
+          const n = Number(f.properties.PARCEL);
+          const row = [gush, n, state.partial[n] ? 'בחלק' : 'בשלמות', dunam(f.properties.LEGAL_AREA)];
+          if (marked) row.push(dunam(marked.perParcel[n]?.marked || 0));
+          lines.push(row.join(' | '));
+        }
+      }
+      if (marked) lines.push('', `סה״כ שטח מסומן: ${dunam(marked.total)} דונם (נמדד גרפית)`);
+      lines.push('', 'לא לצרכי רישום', '', `קישור למפה: ${location.href}`);
+      location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
     }
 
     function editableInfoRow(label, key, placeholder) {
@@ -598,6 +758,8 @@
       if (helkot && helkot.length) u.searchParams.set('helka', formatHelkot(helkot));
       else u.searchParams.delete('helka');
       if (fileNo) u.searchParams.set('tik', fileNo); else u.searchParams.delete('tik');
+      const poly = encodePolys();
+      if (poly) u.searchParams.set('poly', poly); else u.searchParams.delete('poly');
       for (const [k, v] of Object.entries(manual)) {
         if (v) u.searchParams.set(k, v); else u.searchParams.delete(k);
       }
@@ -613,10 +775,12 @@
         setStatus(err.message, true);
       }
     });
-    map.on('click', (e) => identifyAt(e.latlng));
+    map.on('click', (e) => { if (!drawMode) identifyAt(e.latlng); });
     window.addEventListener('beforeprint', () => map.invalidateSize());
     window.addEventListener('afterprint', () => map.invalidateSize());
 
+    decodePolys(urlParams.get('poly'));
+    refreshDrawnLabels();
     if (urlParams.get('gush')) {
       try {
         showParcels(urlParams.get('gush'), parseHelkot(urlParams.get('helka')));
