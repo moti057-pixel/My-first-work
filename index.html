@@ -187,7 +187,7 @@
     }
 
     /* מפות התמצאות */
-    #insets { display: none; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+    #insets { display: none; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; direction: ltr; /* כמו בתשריט: תצ"א קרובה משמאל */ }
     #insets.show { display: grid; }
     .inset { position: relative; height: 170px; border: 1.5px solid #000; }
     .inset .leaflet-control-attribution { font-size: 8px; }
@@ -201,27 +201,84 @@
       #helka { width: 130px; }
     }
 
+    /* שדות למילוי */
+    .fill {
+      outline: none; cursor: text; display: inline-block; min-width: 3em;
+      border-bottom: 1px dashed #c8c8c8; white-space: pre-wrap;
+    }
+    .fill:focus { border-bottom-color: #0b6bcb; }
+    .fill:empty::before { content: attr(data-placeholder); color: #b0b0b0; }
+    .info-box td .fill { display: block; }
+    .info-title .fill { display: block; font-weight: bold; }
+    .desc { display: block; margin-top: 10px; font-size: .9rem; line-height: 1.5; }
+    .notes {
+      border: 1.5px solid var(--sheet-line); padding: 6px 8px; margin-top: 12px;
+      font-size: .85rem; line-height: 1.7;
+    }
+    .notes .fill:not(:empty) { text-decoration: underline; }
+    .notes b { display: block; text-decoration: underline; margin-top: 4px; }
+    .no-reg { font-style: italic; font-size: .85rem; margin-top: 6px; }
+    .sheet-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .sheet-north { line-height: 0; }
+    .print-only, .grid-ticks { display: none; }
+
+    /* קואורדינטות רשת ישראל על מסגרת המפה (בהדפסה) */
+    .grid-ticks { position: absolute; inset: 0; pointer-events: none; z-index: 650; }
+    .grid-ticks span {
+      position: absolute; font: 9px Arial, sans-serif; color: #000; direction: ltr;
+      background: rgba(255,255,255,.85); padding: 0 2px; white-space: nowrap;
+    }
+
     /* ---------- הדפסה ---------- */
     @media print {
-      @page { size: A4 landscape; margin: 10mm; }
+      @page { size: A4 landscape; margin: 8mm; }
       body { background: #fff; display: block; height: auto; }
-      header form, #status, .links, .hint, .draw-bar, .logo-actions, .leaflet-control-zoom, .leaflet-control-layers, .leaflet-draw { display: none !important; }
-      header { border: 0; padding: 0 0 6px; }
-      /* פריסה כמו בתשריט: פאנל מימין, מפה ראשית ומתחתיה מפות התמצאות */
-      main {
-        display: grid; height: 180mm; border: 1.5px solid #000;
-        grid-template-columns: 95mm 1fr; grid-template-rows: 1fr 52mm;
-        grid-template-areas: "details map" "details insets";
-      }
+      .screen-only, header, #status, .links, .hint, .draw-bar, .logo-actions, .leaflet-control-zoom, .leaflet-control-layers, .leaflet-draw, #map .north-arrow { display: none !important; }
+      table.print-only { display: table !important; }
+      div.print-only { display: block !important; }
+      .grid-ticks { display: block !important; }
+      main { display: grid; width: 281mm; height: 194mm; margin: 0 auto; border: 2px solid #000; background: #fff; grid-template-columns: 92mm 1fr; grid-template-rows: 1fr 56mm; grid-template-areas: "details map" "details insets"; }
       aside { display: contents; }
-      #details { grid-area: details; border-inline-end: 1.5px solid #000; overflow: hidden; }
-      #map { grid-area: map; height: 100%; min-height: 0; }
-      #insets.show { grid-area: insets; margin: 0; gap: 0; border-top: 1.5px solid #000; }
+      #details { grid-area: details; overflow: hidden; background: #fff; }
+      #map { grid-area: map; height: 100%; min-height: 0; border-inline-start: 2px solid #000; }
+      #insets.show { grid-area: insets; display: grid; margin: 0; gap: 0; border-top: 2px solid #000; border-inline-start: 2px solid #000; }
       .inset { height: 100%; border: 0; }
-      .inset + .inset { border-inline-start: 1.5px solid #000; }
-      .sheet { padding: 6mm 5mm; }
+      .inset + .inset { border-inline-start: 2px solid #000; }
+      .sheet { padding: 4mm; font-size: 11.5px; border-radius: 0; }
+      .sheet-logo img { max-height: 52px; }
+      .info-title { font-size: 12.5px; }
+      .file-no { font-size: 16px; margin: 6px auto 8px; }
       .file-no:empty { display: none; }
-      .info-box td.editable:empty::before { content: ''; }
+      table.parcels { font-size: 11.5px; }
+      .fill { border-bottom: 0 !important; }
+      .fill:empty::before { content: '________' !important; color: #000 !important; }
+      .desc:empty { display: none; }
+      .notes { margin-top: 8px; }
+    }
+    /* מצב הכנה להדפסה על המסך: המפות נטענות בגודל הדף לפני פתיחת חלון ההדפסה */
+    @media screen {
+      body.print-mode .screen-only, body.print-mode header, body.print-mode #status, body.print-mode .links, body.print-mode .hint, body.print-mode .draw-bar, body.print-mode .logo-actions, body.print-mode .leaflet-control-zoom, body.print-mode .leaflet-control-layers, body.print-mode .leaflet-draw, body.print-mode #map .north-arrow { display: none !important; }
+      body.print-mode table.print-only { display: table !important; }
+      body.print-mode div.print-only { display: block !important; }
+      body.print-mode .grid-ticks { display: block !important; }
+      body.print-mode main { display: grid; width: 281mm; height: 194mm; margin: 0 auto; border: 2px solid #000; background: #fff; grid-template-columns: 92mm 1fr; grid-template-rows: 1fr 56mm; grid-template-areas: "details map" "details insets"; }
+      body.print-mode aside { display: contents; }
+      body.print-mode #details { grid-area: details; overflow: hidden; background: #fff; }
+      body.print-mode #map { grid-area: map; height: 100%; min-height: 0; border-inline-start: 2px solid #000; }
+      body.print-mode #insets.show { grid-area: insets; display: grid; margin: 0; gap: 0; border-top: 2px solid #000; border-inline-start: 2px solid #000; }
+      body.print-mode .inset { height: 100%; border: 0; }
+      body.print-mode .inset + .inset { border-inline-start: 2px solid #000; }
+      body.print-mode .sheet { padding: 4mm; font-size: 11.5px; border-radius: 0; }
+      body.print-mode .sheet-logo img { max-height: 52px; }
+      body.print-mode .info-title { font-size: 12.5px; }
+      body.print-mode .file-no { font-size: 16px; margin: 6px auto 8px; }
+      body.print-mode .file-no:empty { display: none; }
+      body.print-mode table.parcels { font-size: 11.5px; }
+      body.print-mode .fill { border-bottom: 0 !important; }
+      body.print-mode .fill:empty::before { content: '________' !important; color: #000 !important; }
+      body.print-mode .desc:empty { display: none; }
+      body.print-mode .notes { margin-top: 8px; }
+      body.print-mode { background: #e9ecef; display: block; height: auto; padding: 8mm 0; }
     }
   </style>
 </head>
@@ -249,6 +306,7 @@
           החלקות יסומנו בצהוב ושאר חלקות הגוש בתכלת על גבי תצלום האוויר.<br />
           לחיצה על המפה מזהה את הגוש והחלקה בנקודה. Shift + לחיצה על חלקה בגוש מוסיפה או מסירה אותה.<br />
           לסימון שטח: כלי הציור (מחומש / מלבן) בצד המפה. השטח המסומן בכל חלקה יחושב אוטומטית.
+          לחיצה על סימון מאפשרת לתת לו שם (למשל 308א).
         </p>
       </div>
       <div id="insets" aria-label="מפות התמצאות">
@@ -261,6 +319,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
   <script>
     // שכבת החלקות הארצית - המרכז למיפוי ישראל (שירות ArcGIS ציבורי)
     const PARCELS_URL =
@@ -326,6 +385,48 @@
       },
     });
     new ScaleRatio({ position: 'bottomleft' }).addTo(map);
+
+    // רשת ישראל החדשה (ITM) - תוויות קואורדינטות על מסגרת המפה
+    if (window.proj4) {
+      proj4.defs('ITM', '+proj=tmerc +lat_0=31.7343936111111 +lon_0=35.2045169444444 +k=1.0000067 ' +
+        '+x_0=219529.584 +y_0=626907.39 +ellps=GRS80 +towgs84=-24.0024,-17.1032,-17.8444,-0.33077,-1.85269,1.66969,5.4248 +units=m +no_defs');
+    }
+    function niceStep(x) {
+      const p = Math.pow(10, Math.floor(Math.log10(x)));
+      return [1, 2, 5, 10].map((k) => k * p).find((v) => v >= x) || 10 * p;
+    }
+    function addGridTicks(m) {
+      const box = L.DomUtil.create('div', 'grid-ticks', m.getContainer());
+      const upd = () => {
+        if (!window.proj4) return;
+        const size = m.getSize();
+        if (size.x < 50 || size.y < 50) return;
+        const b = m.getBounds();
+        const corners = [b.getSouthWest(), b.getNorthWest(), b.getNorthEast(), b.getSouthEast()]
+          .map((ll) => proj4('EPSG:4326', 'ITM', [ll.lng, ll.lat]));
+        const xs = corners.map((c) => c[0]), ys = corners.map((c) => c[1]);
+        const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+        const toPt = (x, y) => { const [lng, lat] = proj4('ITM', 'EPSG:4326', [x, y]); return m.latLngToContainerPoint([lat, lng]); };
+        let html = '';
+        const stepX = niceStep((maxX - minX) / 3), stepY = niceStep((maxY - minY) / 3);
+        for (let x = Math.ceil(minX / stepX) * stepX; x <= maxX; x += stepX) {
+          const pt = toPt(x, (minY + maxY) / 2);
+          if (pt.x < 30 || pt.x > size.x - 30) continue;
+          html += `<span style="left:${pt.x}px;top:0;transform:translateX(-50%)">${Math.round(x)}</span>`;
+          html += `<span style="left:${pt.x}px;bottom:0;transform:translateX(-50%)">${Math.round(x)}</span>`;
+        }
+        for (let y = Math.ceil(minY / stepY) * stepY; y <= maxY; y += stepY) {
+          const pt = toPt((minX + maxX) / 2, y);
+          if (pt.y < 30 || pt.y > size.y - 30) continue;
+          html += `<span style="left:0;top:${pt.y}px;transform:translate(-50%,-50%) rotate(-90deg) translateY(50%)">${Math.round(y)}</span>`;
+          html += `<span style="right:0;top:${pt.y}px;transform:translate(50%,-50%) rotate(90deg) translateY(50%)">${Math.round(y)}</span>`;
+        }
+        box.innerHTML = html;
+      };
+      m.on('resize moveend zoomend', upd);
+      m.whenReady(upd);
+    }
+    addGridTicks(map);
 
     const gushLayer = L.geoJSON(null, {
       style: { color: getCss('--gush'), weight: 2, fillOpacity: 0.05, dashArray: '6 4' },
@@ -396,8 +497,17 @@
     map.on(L.Draw.Event.CREATED, (e) => { addDrawn(e.layer); onDrawingChanged(); });
     map.on('draw:edited draw:deleted', onDrawingChanged);
 
-    function addDrawn(layer) {
+    function addDrawn(layer, name = '') {
       layer.setStyle && layer.setStyle(drawStyle);
+      layer.drawName = name;
+      layer.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        if (drawMode) return;
+        const n = prompt('שם לסימון (למשל 308א). ריק = הצגת השטח בלבד:', layer.drawName || '');
+        if (n === null) return;
+        layer.drawName = n.trim();
+        onDrawingChanged();
+      });
       drawnItems.addLayer(layer);
     }
     function clearDrawing() {
@@ -431,7 +541,8 @@
       drawnItems.eachLayer((l) => {
         const a = turf.area(l.toGeoJSON());
         l.unbindTooltip();
-        l.bindTooltip(`${dunam(a)} ד׳`, { permanent: true, direction: 'center', className: 'drawn-label' });
+        const label = l.drawName ? `${escapeHtml(l.drawName)}<br>${dunam(a)} ד׳` : `${dunam(a)} ד׳`;
+        l.bindTooltip(label, { permanent: true, direction: 'center', className: 'drawn-label' });
       });
     }
     function onDrawingChanged() {
@@ -445,14 +556,21 @@
       const parts = [];
       drawnItems.eachLayer((l) => {
         const ring = l.getLatLngs()[0];
-        parts.push(ring.map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`).join(';'));
+        const coords = ring.map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`).join(';');
+        parts.push(l.drawName ? `${encodeURIComponent(l.drawName)}~${coords}` : coords);
       });
       return parts.join('|');
     }
     function decodePolys(text) {
-      for (const part of String(text || '').split('|').filter(Boolean)) {
+      for (let part of String(text || '').split('|').filter(Boolean)) {
+        let name = '';
+        if (part.includes('~')) {
+          const i = part.indexOf('~');
+          try { name = decodeURIComponent(part.slice(0, i)); } catch { name = ''; }
+          part = part.slice(i + 1);
+        }
         const ring = part.split(';').map((xy) => xy.split(',').map(Number)).filter((p) => p.length === 2 && p.every(Number.isFinite));
-        if (ring.length >= 3) addDrawn(L.polygon(ring));
+        if (ring.length >= 3) addDrawn(L.polygon(ring), name);
       }
     }
 
@@ -468,11 +586,23 @@
     const state = { gush: null, gushFeatures: [], helkot: [], partial: {} };
     const urlParams = new URLSearchParams(location.search);
     let fileNo = urlParams.get('tik') || '';
-    // שדות שממלאים ידנית (אין להם מקור בשכבת החלקות) - נשמרים בקישור
-    const manual = {
-      tochnit: urlParams.get('tochnit') || '',
-      migrash: urlParams.get('migrash') || '',
+    // שדות שממלאים ידנית (אין להם מקור בשכבת החלקות) - נשמרים בקישור.
+    // שדות "user" נזכרים גם בדפדפן (שם היחידה, מי הכין וכו') כדי לא להקליד בכל פעם.
+    const todayStr = (() => { const d = new Date(); return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`; })();
+    const FIELDS = {
+      title: { user: true, def: 'פרטי גוש וחלקה' },
+      tochnit: {}, migrash: {}, desc: {},
+      order_dept: { user: true }, purpose: {}, basemap: { def: 'גוש רשום' },
+      surv_doc: {}, surveyor: {}, surv_date: {},
+      prep_by: { user: true }, prep_date: { def: todayStr }, work_no: {},
     };
+    const FIELD_STORE = 'parcel-locator-field-';
+    const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+    const lsSet = (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch { /* חסום */ } };
+    const manual = {};
+    for (const [k, d] of Object.entries(FIELDS)) {
+      manual[k] = urlParams.get(k) ?? (d.user ? lsGet(FIELD_STORE + k) : null) ?? d.def ?? '';
+    }
 
     function getCss(name) {
       return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -645,6 +775,7 @@
       for (const c of children) if (c != null) e.append(c);
       return e;
     }
+    const escapeHtml = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const uniq = (arr) => [...new Set(arr.filter((v) => v != null && v !== ''))];
     const dunam = (m2) => (Number(m2) / 1000).toFixed(3);
     function formatDate(v) {
@@ -661,7 +792,7 @@
       const ref = selected.length ? selected : gushFeatures;
       const props = ref.map((f) => f.properties);
       const sheet = el('div', { class: 'sheet' });
-      sheet.append(logoBlock());
+      sheet.append(el('div', { class: 'sheet-top' }, logoBlock(), northArrowEl()));
       updateInsets(selected.length ? selected : gushFeatures);
 
       // תיבת פרטים
@@ -671,9 +802,9 @@
         info.append(el('tr', {}, el('th', {}, `${label} :`), el('td', {}, String(value))));
       };
       addInfo('ישוב', uniq(props.map((p) => p.LOCALITY_N)).join(', '));
-      addInfo('גוש', gush);
+      addInfo('גושים', gush);
       if (selected.length) {
-        addInfo('חלקות', formatHelkot(selected.map((f) => Number(f.properties.PARCEL))));
+        addInfo('חלקות', selected.length > 1 ? 'ראה טבלה' : String(selected[0].properties.PARCEL));
       } else {
         addInfo('מס׳ חלקות', gushFeatures.length);
       }
@@ -681,10 +812,13 @@
         info.append(editableInfoRow('תוכנית', 'tochnit', 'למשל תמל/2053'));
         info.append(editableInfoRow('מגרש', 'migrash', 'למשל 8612, בחלק'));
       }
+      const infoRowsBefore = info.rows.length;
       addInfo('סטטוס', uniq(props.map((p) => p.STATUS_TEX)).join(', '));
       const dates = uniq(props.map((p) => p.SYS_DATE)).sort();
       if (dates.length) addInfo('עדכון מפ״י', formatDate(dates[dates.length - 1]));
-      sheet.append(el('div', { class: 'info-box' }, el('div', { class: 'info-title' }, 'פרטי גוש וחלקה'), info));
+      for (let i = infoRowsBefore; i < info.rows.length; i++) info.rows[i].classList.add('screen-only');
+      sheet.append(el('div', { class: 'info-box' },
+        el('div', { class: 'info-title' }, field('title', 'שם היחידה / המחלקה', { label: 'כותרת' })), info));
 
       // מספר תיק (ניתן לעריכה)
       const fileEl = el('div', {
@@ -733,14 +867,21 @@
             el('td', { colSpan: 3 }, 'סה״כ'), el('td', {}, dunam(total)),
             marked ? el('td', {}, dunam(markedSum)) : null)));
         }
+        table.classList.add('screen-only');
         sheet.append(table);
-        sheet.append(el('div', { class: 'sheet-note' },
+        sheet.append(printTable(gush, selected, marked, total));
+        sheet.append(field('desc', 'תיאור הסימון (למשל: איתור חטיבת קרקע 308א סומן עפ״י הנחיית…)',
+          { multiline: true, label: 'תיאור' }));
+        sheet.lastChild.classList.add('desc');
+        sheet.append(notesBox());
+        sheet.append(el('div', { class: 'sheet-note screen-only' },
           'השטח הרשום לפי שכבת החלקות של המרכז למיפוי ישראל.',
           marked ? ' השטח המסומן נמדד גרפית.' : null,
           marked && marked.total - Object.values(marked.perParcel).reduce((s, x) => s + x.marked, 0) > 1
             ? ` שטח מסומן מחוץ לחלקות הנבחרות: ${dunam(marked.total - Object.values(marked.perParcel).reduce((s, x) => s + x.marked, 0))} דונם.`
             : null,
-          el('em', {}, 'לא לצרכי רישום')));
+          null));
+        sheet.append(el('div', { class: 'no-reg' }, 'לא לצרכי רישום'));
       } else {
         const total = gushFeatures.reduce((s, f) => s + (Number(f.properties.LEGAL_AREA) || 0), 0);
         if (total) sheet.append(el('div', { class: 'sheet-note' }, `סה״כ שטח רשום בגוש: ${dunam(total)} דונם`));
@@ -765,8 +906,51 @@
         makeCopyButton('העתקת קישור לדף', () => location.href),
         makeCopyButton('העתקת קואורדינטות', () => `${lat}, ${lng}`),
         el('button', { type: 'button', class: 'secondary primary', onclick: () => sendEmail(gush, selected, marked) }, '✉️ שליחה במייל'),
-        el('button', { type: 'button', class: 'secondary primary', onclick: () => window.print() }, '🖨️ הדפסה'),
+        el('button', { type: 'button', class: 'secondary primary', onclick: printSheet }, '🖨️ הדפסה'),
       ));
+    }
+
+    // טבלת התשריט להדפסה: גוש | חלקה | חלקיות | שטח בדונם בערך (תא שטח ממוזג)
+    function printTable(gush, selected, marked, legalTotal) {
+      const tbody = el('tbody');
+      const area = marked ? dunam(marked.total) : dunam(legalTotal);
+      selected.forEach((f, i) => {
+        const n = Number(f.properties.PARCEL);
+        const tr = el('tr');
+        if (i === 0) tr.append(el('td', { rowSpan: selected.length }, String(gush)));
+        tr.append(el('td', {}, String(n)), el('td', {}, state.partial[n] ? 'בחלק' : 'בשלמות'));
+        if (i === 0) tr.append(el('td', { rowSpan: selected.length }, area));
+        tbody.append(tr);
+      });
+      return el('table', { class: 'parcels print-only' },
+        el('thead', {}, el('tr', {},
+          el('th', {}, 'גוש'), el('th', {}, 'חלקה'), el('th', {}, 'חלקיות'), el('th', {}, 'שטח בדונם בערך'))),
+        tbody);
+    }
+
+    // תיבת ההערות של התשריט
+    function notesBox() {
+      const line = (...parts) => el('div', {}, ...parts);
+      return el('div', { class: 'notes' },
+        line('תשריט זה הוכן עפ״י הזמנה ממחלקת ', field('order_dept', 'שם המחלקה')),
+        line('מטרת התרשים: ', field('purpose', 'למשל: תביעה משפטית')),
+        el('b', {}, 'הערות:'),
+        line('1. התשריט מבוסס על מפת ', field('basemap', 'גוש רשום')),
+        line('התשריט מבוסס על תכנית בנין ערים מס׳ ', field('tochnit', 'מס׳ תוכנית')),
+        line('התשריט מבוסס על ', field('surv_doc', 'מסמך'), ' של מודד ', field('surveyor', 'שם המודד'),
+          ' מתאריך ', field('surv_date', 'תאריך')),
+        line('2. התשריט הוכן ע״י ', field('prep_by', 'שם'), ' בתאריך ', field('prep_date', 'תאריך')),
+        line('מס׳ עבודה ', field('work_no', 'מס׳')),
+      );
+    }
+
+    function northArrowEl() {
+      const d = el('div', { class: 'sheet-north print-only', 'aria-hidden': 'true' });
+      d.innerHTML = `<svg width="30" height="40" viewBox="0 0 34 44">
+        <text x="17" y="11" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="11" fill="#000">N</text>
+        <polygon points="17,14 25,40 17,34" fill="#000"/>
+        <polygon points="17,14 9,40 17,34" fill="#fff" stroke="#000" stroke-width="1"/></svg>`;
+      return d;
     }
 
     // ---------- לוגו (נשמר רק בדפדפן הנוכחי) ----------
@@ -829,6 +1013,7 @@
         return L.layerGroup().addTo(m);
       };
       insets = { m1, m2, g1: mk(m1), g2: mk(m2) };
+      addGridTicks(m1); addGridTicks(m2);
     }
     function updateInsets(features) {
       if (!features.length) { insetsEl.classList.remove('show'); return; }
@@ -854,6 +1039,23 @@
     }
     window.addEventListener('beforeprint', () => { if (insets) { insets.m1.invalidateSize(); insets.m2.invalidateSize(); } });
 
+    // הדפסה: מעבר לפריסת הדף על המסך, טעינת המפות בגודל הנכון ואז חלון ההדפסה
+    function allMaps() { return [map, ...(insets ? [insets.m1, insets.m2] : [])]; }
+    function printSheet() {
+      document.body.classList.add('print-mode');
+      allMaps().forEach((m) => m.invalidateSize({ pan: false }));
+      if (state.last && state.last[2].length) {
+        map.fitBounds(L.featureGroup([parcelLayer, drawnItems]).getBounds(), { padding: [30, 30], maxZoom: 19, animate: false });
+      }
+      if (state.last) updateInsets(state.last[2].length ? state.last[2] : state.last[1]);
+      setTimeout(() => window.print(), 1800);
+    }
+    window.addEventListener('afterprint', () => {
+      if (!document.body.classList.contains('print-mode')) return;
+      document.body.classList.remove('print-mode');
+      allMaps().forEach((m) => m.invalidateSize({ pan: false }));
+    });
+
     function startPolygon() {
       new L.Draw.Polygon(map, { allowIntersection: false, showArea: false, shapeOptions: drawStyle }).enable();
     }
@@ -867,6 +1069,7 @@
       const locality = uniq(selected.map((f) => f.properties.LOCALITY_N)).join(', ');
       if (locality) lines.push(`ישוב: ${locality}`);
       lines.push(`גוש: ${gush}`);
+      if (manual.desc) lines.push(manual.desc);
       if (helkot.length) lines.push(`חלקות: ${formatHelkot(helkot)}`);
       if (manual.tochnit) lines.push(`תוכנית: ${manual.tochnit}`);
       if (manual.migrash) lines.push(`מגרש: ${manual.migrash}`);
@@ -884,15 +1087,25 @@
       location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
     }
 
-    function editableInfoRow(label, key, placeholder) {
-      const td = el('td', {
-        class: 'editable', contenteditable: 'true', spellcheck: 'false',
-        'data-placeholder': placeholder, 'aria-label': label,
+    // שדה למילוי (contenteditable) המקושר ל-manual[key]; אותו שדה יכול להופיע בכמה מקומות
+    function field(key, placeholder, { multiline = false, label = placeholder } = {}) {
+      const f = el('span', {
+        class: 'fill', contenteditable: 'true', spellcheck: 'false',
+        'data-field': key, 'data-placeholder': placeholder, 'aria-label': label,
       });
-      td.textContent = manual[key];
-      td.addEventListener('input', () => { manual[key] = td.textContent.trim(); updateUrl(state.gush, state.helkot); });
-      td.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); td.blur(); } });
-      return el('tr', {}, el('th', {}, `${label} :`), td);
+      f.textContent = manual[key] || '';
+      f.addEventListener('input', () => {
+        manual[key] = (multiline ? f.innerText : f.textContent).replace(/\u00a0/g, ' ').trim();
+        if (FIELDS[key] && FIELDS[key].user) lsSet(FIELD_STORE + key, manual[key]);
+        document.querySelectorAll(`[data-field="${key}"]`).forEach((o) => { if (o !== f) o.textContent = manual[key]; });
+        updateUrl(state.gush, state.helkot);
+      });
+      f.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !multiline) { e.preventDefault(); f.blur(); } });
+      f.addEventListener('blur', () => { if (!f.textContent.trim()) f.textContent = ''; });
+      return f;
+    }
+    function editableInfoRow(label, key, placeholder) {
+      return el('tr', {}, el('th', {}, `${label} :`), el('td', {}, field(key, placeholder, { label })));
     }
 
     function makeLink(text, href) {
@@ -918,7 +1131,7 @@
       const poly = encodePolys();
       if (poly) u.searchParams.set('poly', poly); else u.searchParams.delete('poly');
       for (const [k, v] of Object.entries(manual)) {
-        if (v) u.searchParams.set(k, v); else u.searchParams.delete(k);
+        if (v && v !== FIELDS[k].def) u.searchParams.set(k, v); else u.searchParams.delete(k);
       }
       history.replaceState(null, '', u);
     }
