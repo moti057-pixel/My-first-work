@@ -173,6 +173,26 @@
     .sheet-note { font-size: .85rem; margin-top: 10px; line-height: 1.5; }
     .sheet-note em { display: block; margin-top: 6px; }
 
+    /* לוגו */
+    .sheet-logo { display: flex; justify-content: flex-start; align-items: center; gap: 8px; margin-bottom: 10px; min-height: 28px; }
+    .sheet-logo img { max-height: 64px; max-width: 220px; object-fit: contain; }
+    .logo-actions { display: flex; gap: 6px; }
+    .logo-actions button { font-size: .75rem; padding: 3px 8px; }
+
+    /* חץ צפון וקנ"מ על המפה */
+    .north-arrow { background: rgba(255,255,255,.85); border-radius: 4px; padding: 2px; line-height: 0; }
+    .scale-ratio {
+      background: rgba(255,255,255,.9); color: #000; border: 1px solid #333;
+      padding: 1px 6px; font: bold 12px Arial, sans-serif; direction: ltr;
+    }
+
+    /* מפות התמצאות */
+    #insets { display: none; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+    #insets.show { display: grid; }
+    .inset { position: relative; height: 170px; border: 1.5px solid #000; }
+    .inset .leaflet-control-attribution { font-size: 8px; }
+    .inset-ratio { position: absolute; bottom: 4px; left: 4px; z-index: 500; }
+
     @media (max-width: 760px) {
       main { flex-direction: column; }
       #map { min-height: 55vh; }
@@ -185,11 +205,21 @@
     @media print {
       @page { size: A4 landscape; margin: 10mm; }
       body { background: #fff; display: block; height: auto; }
-      header form, #status, .links, .hint, .draw-bar, .leaflet-control-zoom, .leaflet-control-layers, .leaflet-draw { display: none !important; }
+      header form, #status, .links, .hint, .draw-bar, .logo-actions, .leaflet-control-zoom, .leaflet-control-layers, .leaflet-draw { display: none !important; }
       header { border: 0; padding: 0 0 6px; }
-      main { display: flex; height: 170mm; border: 1.5px solid #000; }
-      #map { height: 100%; }
-      aside { width: 95mm; border-inline-start: 1.5px solid #000; overflow: visible; }
+      /* פריסה כמו בתשריט: פאנל מימין, מפה ראשית ומתחתיה מפות התמצאות */
+      main {
+        display: grid; height: 180mm; border: 1.5px solid #000;
+        grid-template-columns: 95mm 1fr; grid-template-rows: 1fr 52mm;
+        grid-template-areas: "details map" "details insets";
+      }
+      aside { display: contents; }
+      #details { grid-area: details; border-inline-end: 1.5px solid #000; overflow: hidden; }
+      #map { grid-area: map; height: 100%; min-height: 0; }
+      #insets.show { grid-area: insets; margin: 0; gap: 0; border-top: 1.5px solid #000; }
+      .inset { height: 100%; border: 0; }
+      .inset + .inset { border-inline-start: 1.5px solid #000; }
+      .sheet { padding: 6mm 5mm; }
       .file-no:empty { display: none; }
       .info-box td.editable:empty::before { content: ''; }
     }
@@ -220,6 +250,10 @@
           לחיצה על המפה מזהה את הגוש והחלקה בנקודה. Shift + לחיצה על חלקה בגוש מוסיפה או מסירה אותה.<br />
           לסימון שטח: כלי הציור (מחומש / מלבן) בצד המפה. השטח המסומן בכל חלקה יחושב אוטומטית.
         </p>
+      </div>
+      <div id="insets" aria-label="מפות התמצאות">
+        <div class="inset" id="inset1"></div>
+        <div class="inset" id="inset2"></div>
       </div>
     </aside>
   </main>
@@ -256,6 +290,42 @@
       { position: 'topleft' }
     ).addTo(map);
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+
+    // חץ צפון
+    const NorthArrow = L.Control.extend({
+      onAdd() {
+        const d = L.DomUtil.create('div', 'north-arrow');
+        d.title = 'צפון';
+        d.innerHTML = `<svg width="34" height="44" viewBox="0 0 34 44" aria-hidden="true">
+          <text x="17" y="11" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="11" fill="#000">N</text>
+          <polygon points="17,14 25,40 17,34" fill="#000"/>
+          <polygon points="17,14 9,40 17,34" fill="#fff" stroke="#000" stroke-width="1"/></svg>`;
+        return d;
+      },
+    });
+    new NorthArrow({ position: 'topright' }).addTo(map);
+
+    // קנ"מ משוער (לפי רמת הזום, למסך 96dpi)
+    function scaleDenominator(m) {
+      const lat = m.getCenter().lat * Math.PI / 180;
+      const metersPerPixel = 40075016.686 * Math.cos(lat) / (256 * Math.pow(2, m.getZoom()));
+      return metersPerPixel / (0.0254 / 96);
+    }
+    function niceScale(d) {
+      const p = Math.pow(10, Math.floor(Math.log10(d)));
+      const steps = [1, 2, 2.5, 5, 10];
+      const best = steps.reduce((a, b) => (Math.abs(b * p - d) < Math.abs(a * p - d) ? b : a));
+      return '1:' + Math.round(best * p).toLocaleString('en-US');
+    }
+    const ScaleRatio = L.Control.extend({
+      onAdd(m) {
+        const d = L.DomUtil.create('div', 'scale-ratio');
+        const upd = () => { d.textContent = niceScale(scaleDenominator(m)); };
+        m.on('zoomend moveend', upd); upd();
+        return d;
+      },
+    });
+    new ScaleRatio({ position: 'bottomleft' }).addTo(map);
 
     const gushLayer = L.geoJSON(null, {
       style: { color: getCss('--gush'), weight: 2, fillOpacity: 0.05, dashArray: '6 4' },
@@ -591,6 +661,8 @@
       const ref = selected.length ? selected : gushFeatures;
       const props = ref.map((f) => f.properties);
       const sheet = el('div', { class: 'sheet' });
+      sheet.append(logoBlock());
+      updateInsets(selected.length ? selected : gushFeatures);
 
       // תיבת פרטים
       const info = el('table');
@@ -696,6 +768,91 @@
         el('button', { type: 'button', class: 'secondary primary', onclick: () => window.print() }, '🖨️ הדפסה'),
       ));
     }
+
+    // ---------- לוגו (נשמר רק בדפדפן הנוכחי) ----------
+    const LOGO_KEY = 'parcel-locator-logo';
+    function getLogo() { try { return localStorage.getItem(LOGO_KEY) || ''; } catch { return ''; } }
+    function setLogo(dataUrl) {
+      try {
+        if (dataUrl) localStorage.setItem(LOGO_KEY, dataUrl); else localStorage.removeItem(LOGO_KEY);
+      } catch { /* אחסון חסום - הלוגו יוצג רק עד רענון */ }
+      sessionLogo = dataUrl;
+      if (state.last) renderSheet(...state.last);
+    }
+    let sessionLogo = getLogo();
+    function pickLogo() {
+      const input = el('input', { type: 'file', accept: 'image/*' });
+      input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const img = new Image();
+        img.onload = () => {
+          // הקטנה לגובה 160px כדי לשמור קטן
+          const h = Math.min(160, img.height), w = Math.round(img.width * h / img.height);
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          setLogo(c.toDataURL('image/png'));
+          URL.revokeObjectURL(img.src);
+        };
+        img.onerror = () => setStatus('לא ניתן לקרוא את קובץ הלוגו', true);
+        img.src = URL.createObjectURL(file);
+      });
+      input.click();
+    }
+    function logoBlock() {
+      const box = el('div', { class: 'sheet-logo' });
+      if (sessionLogo) box.append(el('img', { src: sessionLogo, alt: 'לוגו' }));
+      box.append(el('div', { class: 'logo-actions' },
+        el('button', { type: 'button', class: 'secondary', onclick: pickLogo }, sessionLogo ? 'החלפת לוגו' : '+ הוספת לוגו'),
+        sessionLogo ? el('button', { type: 'button', class: 'secondary', onclick: () => setLogo('') }, 'הסרה') : null));
+      return box;
+    }
+
+    // ---------- מפות התמצאות ----------
+    const insetsEl = $('insets');
+    let insets = null;
+    function initInsets() {
+      const opts = {
+        zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false,
+        doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false, tap: false,
+      };
+      const m1 = L.map('inset1', opts);
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, attribution: 'Esri' }).addTo(m1);
+      const m2 = L.map('inset2', opts);
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, attribution: 'Esri' }).addTo(m2);
+      const mk = (m) => {
+        const r = L.DomUtil.create('div', 'scale-ratio inset-ratio', m.getContainer());
+        const upd = () => { r.textContent = niceScale(scaleDenominator(m)); };
+        m.on('zoomend moveend', upd);
+        return L.layerGroup().addTo(m);
+      };
+      insets = { m1, m2, g1: mk(m1), g2: mk(m2) };
+    }
+    function updateInsets(features) {
+      if (!features.length) { insetsEl.classList.remove('show'); return; }
+      insetsEl.classList.add('show');
+      if (!insets) initInsets();
+      const { m1, m2, g1, g2 } = insets;
+      m1.invalidateSize(); m2.invalidateSize();
+      const geo = L.geoJSON({ type: 'FeatureCollection', features });
+      const b = geo.getBounds();
+      const c = b.getCenter();
+      // מפה 1: תצ"א, כמה רמות זום החוצה מהחלקות
+      g1.clearLayers();
+      L.geoJSON({ type: 'FeatureCollection', features }, {
+        style: { color: '#ff2d2d', weight: 2, fill: false },
+      }).addTo(g1);
+      const z1 = Math.max(13, Math.min(18, map.getBoundsZoom(b) - 2));
+      m1.setView(c, z1, { animate: false });
+      // מפה 2: מפת רחובות אזורית עם סמן מיקום
+      g2.clearLayers();
+      L.circleMarker(c, { radius: 7, color: '#fff', weight: 2, fillColor: '#ff2d2d', fillOpacity: 1 })
+        .bindTooltip('המיקום', { permanent: true, direction: 'top', offset: [0, -6] }).addTo(g2);
+      m2.setView(c, 12, { animate: false });
+    }
+    window.addEventListener('beforeprint', () => { if (insets) { insets.m1.invalidateSize(); insets.m2.invalidateSize(); } });
 
     function startPolygon() {
       new L.Draw.Polygon(map, { allowIntersection: false, showArea: false, shapeOptions: drawStyle }).enable();
